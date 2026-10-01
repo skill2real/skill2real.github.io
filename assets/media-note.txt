@@ -1,0 +1,7 @@
+Skill2Real media notes
+
+The teaser, method diagram and result plots are web renderings of the paper figures. The teaser includes authored simulation scene illustrations and real-world photographs.
+
+The gallery contains 58 qualitative recordings: 11 LIBERO-90, 4 LIBERO-Pro Long, 8 Robosuite, 25 real-world, and 10 tabletop scenes. The tabletop collection contains nine scripted demonstrations and one archived action replay. The clips do not add quantitative evaluation trials. Playback-speed labels are retained.
+
+The recordings are accompanied by task code using the current shared robot API. The original source versions are preserved. Skill memories contain natural-language guidance.

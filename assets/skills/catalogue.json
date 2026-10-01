@@ -1,0 +1,3345 @@
+{
+  "entries": [
+    {
+      "id": "skill-001",
+      "title": "Choose a clear side for rim contact",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an open vessel crowded by its handle or neighboring objects, choose a clear rim side and engage the wall below the observed top. Select the closing and approach directions from that side's visible clearance."
+        ],
+        [
+          "Apply when",
+          "Mugs, cups, bowls, and similar open vessels in surface- or container-placement tasks."
+        ],
+        [
+          "Decision context",
+          "A top-down rim pinch can push or lose an open vessel even when the vessel is correctly localized, especially when its handle or a nearby object crowds the selected rim side. Use the observed upper body and rim extent to choose a side clear of the handle and surrounding clutter. Select the corresponding closing and downward-approach directions, place the contact near that side of the rim, and engage the vertical wall below the observed top. Preserve the grasp-to-body planar relation when placing the vessel."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-002",
+      "title": "Grasp a long handle near its root",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a long handle whose midpoint contact slips during transport, choose a thicker region near its root. Ground contact height in that local region rather than the whole handle."
+        ],
+        [
+          "Apply when",
+          "Pans, handled cookware, and long handled tools."
+        ],
+        [
+          "Decision context",
+          "A midpoint handle contact can lose the object during horizontal transport. Moving toward the handle root changes the local contact height because that region slopes toward the body. Associate the handle with its parent and infer its direction relative to the body. Select a thicker region toward the root, ground contact height in that local region rather than the whole handle, and adjust engagement in small steps while preserving the image-selected closing and approach directions."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-003",
+      "title": "Identify the actionable receptacle opening",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Distinguish a receptacle's broad opening from an edge or wall patch using visible area, overlap and containment relative to the parent. Leave the opening unresolved when those relationships are ambiguous."
+        ],
+        [
+          "Apply when",
+          "Baskets, bins, drawers, and trays after localizing the semantic parent."
+        ],
+        [
+          "Decision context",
+          "Apply to baskets, bins, drawers, and trays after localizing the semantic parent."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-004",
+      "title": "Choose a supported interior placement",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an obliquely viewed receptacle, compare its structure with the visible opening before selecting the interior destination. A visible wall alone does not identify the supporting interior."
+        ],
+        [
+          "Apply when",
+          "Object-in-basket and object-in-bin/drawer tasks viewed obliquely."
+        ],
+        [
+          "Decision context",
+          "Failure signature: an open basket/bin/drawer is semantically localized, but a full-mask median aims at a visible wall or an opening-only mask is biased toward the visible back half, so a retained object collides with the rim or lands outside. Use trimmed bounds of the full receptacle structure to center the occluded depth axis, trimmed bounds of an opening/interior mask to center the unobstructed lateral axis, and a dense low interior band for support Z. Preserve the measured grasp-to-object-bottom offset, transport above the rim, descend vertically, release just above the support, retreat vertically when clearance allows, and settle."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-005",
+      "title": "Continue a partially completed slider stroke",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Push"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When a slider moves and then stalls, preserve the achieved displacement. Reobserve the same part and continue only the remaining inward stroke, without an outward action that undoes progress."
+        ],
+        [
+          "Apply when",
+          "Resistant prismatic sliders in drawers, appliance trays, and cabinet panels."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a drawer, sliding tray, or panel moves usefully during a retained or closed-finger push, but commanded later waypoints complete while the wrist deflects, the grasp is lost, or the slider stalls short. Open at the achieved endpoint without outward retreat, disengage orthogonally, re-observe and re-localize the shifted part using relative geometry plus continuity, then use fresh short monotonic compact-pusher strokes. Stop rather than act if recovery segmentation merges adjacent repeated handles."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-006",
+      "title": "Place the support bowl before stacking",
+      "layer": "Brain",
+      "category": "sequence",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "When the task allows reordering and carrying a nested pair is unsupported, put the support bowl in the tray first. Preserve that relation, then place the upper bowl on it."
+        ],
+        [
+          "Apply when",
+          "This task requests left-bowl-on-right-bowl and the resulting pair in the tray, while public observations provide no verified way to carry two nested bowls."
+        ],
+        [
+          "Decision context",
+          "Decision change: place the designated right/support bowl in the tray first, publicly verify and preserve that completed relation, then execute only the left-bowl-on-support suffix. Supporting observation: the lower bowl remains visibly contained while the left bowl is acquired and transported. Disconfirming observation: the lower bowl is not contained after its release, moves during the upper-bowl suffix, or the task language/public state requires an intermediate stack before tray placement. Then stop and preserve the scene rather than replaying the prefix."
+        ],
+        [
+          "Code template",
+          "def observe_next_objective(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-007",
+      "title": "Rebind a support bowl after moving it",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "After the support bowl moves into the tray, rebind it from current containment evidence. Its former relational description may now identify a different bowl; continue only with an unambiguous support."
+        ],
+        [
+          "Apply when",
+          "After the right bowl has been moved into the tray, two visually similar bowls remain and a relational phrase may rank the untouched bowl above the moved one."
+        ],
+        [
+          "Decision context",
+          "Disconfirming observation: no candidate or multiple candidates plausibly lie in the tray, current tray geometry is unresolved, or the tray already contains another bowl. Then identity is unresolved and the suffix must not continue."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-008",
+      "title": "Verify placement before closing a drawer",
+      "layer": "Brain",
+      "category": "sequence",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Preserve the place-before-close order for a carton and drawer. Permit closure only after fresh observations support the carton within the intended drawer's footprint and above its floor."
+        ],
+        [
+          "Apply when",
+          "The brown carton has been released near the bound open upper drawer and drawer closure is still unexecuted."
+        ],
+        [
+          "Decision context",
+          "Decision change: preserve the place-before-close order and issue the closing interaction only when a fresh public observation supports the requested carton above the measured drawer floor and within the originally observed drawer footprint. Otherwise stop and preserve the released state. A post-close handle mask that jumps to another cabinet is not grounds for another push. Disconfirming observation: a continuity-valid carton mask outside the drawer or an unresolved destination prevents closure."
+        ],
+        [
+          "Code template",
+          "def observe_next_objective(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-009",
+      "title": "Maintain contact through a wiping sweep",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Wipe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a wiping sweep, maintain surface contact through short Cartesian segments, including transitions between rows. Inspect the first row's physical effect before extending coverage."
+        ],
+        [
+          "Apply when",
+          "Spill wiping and other sustained surface-contact sweeps."
+        ],
+        [
+          "Decision context",
+          "Verify the first row's physical effect before tuning coverage."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-010",
+      "title": "Verify both contacts before a bimanual lift",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Bimanual",
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When both hands close on opposed handles but the object stays on its support, seat the contacts toward the handle-to-handle axis before beginning a short synchronized lift."
+        ],
+        [
+          "Apply when",
+          "Bimanual handled containers and tray/frame lifts."
+        ],
+        [
+          "Decision context",
+          "Failure signature: both arms reach and close on opposed handles, but the first vertical lift leaves the object on its support. Repair: preserve the observation-derived closing/approach axes, close both grippers, then move both hands a small equal distance inward along the handle-to-handle axis to seat the crossbars against the outer fingers before beginning with a short synchronized lift."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-011",
+      "title": "Acquire a tall tapered bottle",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When a tapered upright container is disturbed by a low approach, preserve the selected side and move the contact toward its upper body, above the unstable taper."
+        ],
+        [
+          "Apply when",
+          "Tapered condiment bottles, jars, and similar upright packages in both container-placement and surface-placement tasks."
+        ],
+        [
+          "Decision context",
+          "From the public object mask, estimate XY using the midpoint of robust bounds of an extreme-top slice."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-012",
+      "title": "Acquire a tapered bottle below its cap",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a tapered bottle with an accessible side corridor, approach the upper body horizontally rather than repeating an ineffective downward contact near the cap."
+        ],
+        [
+          "Apply when",
+          "Public RGB/depth shows a clear horizontal approach corridor."
+        ],
+        [
+          "Decision context",
+          "Apply when public RGB/depth shows a clear horizontal approach corridor."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-013",
+      "title": "Acquire an upright carton",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an upright rectangular package, select the narrow pair of opposing side faces and a body contact between its visible top and bottom. Align the closing direction with those faces."
+        ],
+        [
+          "Apply when",
+          "Cartons and compact boxes in both object-in-container and object-on-surface tasks."
+        ],
+        [
+          "Decision context",
+          "Apply to cartons and compact boxes in both object-in-container and object-on-surface tasks."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-014",
+      "title": "Acquire an upright cylindrical package",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an upright cylindrical package, choose a body-centered contact and explicit closing and downward approach directions from the current view."
+        ],
+        [
+          "Apply when",
+          "Cans, jars, bottles, and similar upright objects in container or surface placement."
+        ],
+        [
+          "Decision context",
+          "Failure signature: an upright cylindrical package is correctly segmented but needs a reproducible non-generated grasp."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-015",
+      "title": "Activate the stove before placing the pan",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Activate the stove before moving the pan when its control is exposed. Preserve the visibly active state during the transition to the pan and check it again before placing the pan."
+        ],
+        [
+          "Apply when",
+          "The task requires stove activation before moving a pan."
+        ],
+        [
+          "Decision context",
+          "For this task, when public RGB shows the pan off an inactive stove and the raised stove control is exposed, activate the stove before moving the pan. After each bounded control increment, inspect fresh RGB inside the localized burner mask and stop as soon as the red active appearance is present and persists. Then release, retreat, route the open hand through the documented home pose, and proceed to the pan only if fresh observations still show activation after home and at the high pan pregrasp. This changes the progress and transition-route decisions: it avoids both continuing past a completed activation and crossing directly through the control workspace. The method is called into question if the control does not visibly co-move on the first rotation, the red appearance never emerges or does not persist, or home routing changes the state."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-016",
+      "title": "Adapt rim contact to handle clearance",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a handled vessel, choose the rim side with enough room for the fingers and the following lift. Engage the side wall while keeping the handle outside the approach corridor."
+        ],
+        [
+          "Apply when",
+          "Mugs, cups, small pots, and similar handled vessels in both surface-placement and container-placement tasks."
+        ],
+        [
+          "Decision context",
+          "Segment the semantic parent, a parent-qualified handle, and the rim. Compute the robust rim/body center and handle center. Contact near one robust rim radius on that side and roughly 12-20 mm below the rim top."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-017",
+      "title": "Advance only on observed physical progress",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For butter-to-tray placement, advance from acquisition to transport only on observed object motion. After release, judge the remaining goal from the package's settled relation to the intended tray."
+        ],
+        [
+          "Apply when",
+          "For butter-to-tray placement."
+        ],
+        [
+          "Decision context",
+          "After the shortest probe, continue only if the requested red/yellow carton is elevated/co-moving and no comparable low instance remains at its source. After the single release and bounded settling observations, stop only if the qualified carton center is inside the initially perceived trimmed tray bounds, low relative to the rim, and away from source. Unresolved perception reports uncertainty without replaying completed actions. A low source instance, wrong item motion, elevated/attached final carton, out-of-tray center, or unresolved view calls the decision into question."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-018",
+      "title": "Align a held body with its target",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a ring or handled object, distinguish the acquired contact from the feature that must meet the target. Placement should align the opening or body with its destination."
+        ],
+        [
+          "Apply when",
+          "For a ring or handled object."
+        ],
+        [
+          "Decision context",
+          "Failure signature: transport visibly succeeds, but release places the object beside the target because the robot was commanded to put its off-center grasp point at the target. Apply whenever grasp point and functional placement feature differ, such as a handled ring onto a peg or a mug held by its handle onto a locator. Repair: before grasping, localize and deproject both the grasp point and functional feature at a common object-surface depth."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-019",
+      "title": "Approach without sweeping through clutter",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When clutter obstructs a low approach, first reach a clear position above the selected object, then descend through the visible corridor while preserving the chosen contact directions."
+        ],
+        [
+          "Apply when",
+          "Cluttered vessel, grocery-package, or tool pickup."
+        ],
+        [
+          "Decision context",
+          "Apply in cluttered vessel, grocery-package, or tool pickup."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-020",
+      "title": "Assess drawer placement after release",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "After releasing an object near a drawer, inspect its relation to the intended interior before marking placement complete. Keep an unresolved destination relation open."
+        ],
+        [
+          "Apply when",
+          "After releasing an object near a drawer."
+        ],
+        [
+          "Decision context",
+          "Trigger: a fresh public view shows the black bowl already supported within the selected drawer even though the cleanup/release suffix has not completed normally. Decision change: recognize the requested relation as completed, preserve the placed bowl and stop instead of replaying pickup or transport. Treat the late exception as a failed or unnecessary suffix rather than loss of all progress. This rule is called into question when the bowl is outside the drawer, unstable, or still moving with the hand."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-021",
+      "title": "Associate a part with its parent object",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Bind an actionable part to its visible parent before using it. Require the part's position and extent to agree with the parent's geometry."
+        ],
+        [
+          "Apply when",
+          "Handled cookware, mugs, tools, and appliance parts in clutter."
+        ],
+        [
+          "Decision context",
+          "Accept only candidates with a plausible parent-relative direction, distance, and cross-axis alignment. Estimate contact height from a dense interior/lower band after rejecting tall clusters. Use the part for the along-axis coordinate and regularize the cross-axis coordinate from the parent while estimating the local handle yaw."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-022",
+      "title": "Balance rim engagement and release clearance",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Choose rim engagement with both pickup and release in mind. A contact that retains the vessel can still leave an inner finger trapped when the vessel reaches its support."
+        ],
+        [
+          "Apply when",
+          "Mugs/cups and handled tools or cookware with a vertical loop."
+        ],
+        [
+          "Decision context",
+          "Failure signature: repeated rim grasps on a handled vessel alternate between narrow tip retention that slips on short lift and deep wide jams that tilt the vessel, while a distinct handle is publicly visible. Segment the semantic parent and a parent-qualified handle. Select a robust outer mid-height handle band. Choose an explicit world-frame jaw axis normal to the observed handle plane and world-down approach. Because monocular public depth measures the camera-facing handle surface, center the thin handle by shifting a small geometry-scaled amount toward its occluded half along the same jaw line."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-023",
+      "title": "Bind a black bowl and its plate",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the requested black bowl and its plate as separate scene entities. Require each selected region to match the instruction and the current visible geometry."
+        ],
+        [
+          "Apply when",
+          "The task names a black bowl and a plate that require separate bindings."
+        ],
+        [
+          "Decision context",
+          "Continue only when those masks are geometrically consistent with the visible roles. Multiple compact black vessels, multiple plates, an invalid mask shape, sparse depth, or role ambiguity would call the binding into question and require fresh disambiguation."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-024",
+      "title": "Bind a bowl among background distractors",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For bowl-to-cabinet placement, distinguish the compact black vessel from background cabinetry and identify the foreground cabinet's supporting top."
+        ],
+        [
+          "Apply when",
+          "For bowl-to-cabinet placement."
+        ],
+        [
+          "Decision context",
+          "When this task's public instruction requests the black bowl and the scene also contains background cabinetry, bind the source by trying 'black ceramic bowl', then 'black bowl' and 'bowl', retaining a compact bowl-shaped mask, and bind the destination with 'cabinet top surface', then parent-qualified top-surface fallbacks, retaining a broad horizontal public-depth plane. The trigger is ambiguity between the small task cabinet and background cabinets. Supporting observations are a compact mask at the black open vessel plus a broad high plane on the small cabinet. This rule is called into question by multiple compact black bowls, no geometry-valid top mask, or a top too small for the bowl."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-025",
+      "title": "Bind a middle bowl using distinct instances",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "When exactly three distinct black bowls have an unambiguous image-row order, bind the middle instance by that relative order. Do not apply the rule when the count, viewpoint or separation is unresolved."
+        ],
+        [
+          "Apply when",
+          "When exactly three distinct black bowls have an unambiguous image-row order."
+        ],
+        [
+          "Decision context",
+          "Disconfirming observation: fewer/more than three plausible instances, changed viewpoint/order, or another instance moving under the diagnostic lift makes the rule inapplicable and should stop rather than guess."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-026",
+      "title": "Bind a thin package to a frozen grasp option",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind a thin package to a frozen local grasp option whose contact surfaces are visible and accessible. Keep the task referent fixed while selecting the applicable local skill."
+        ],
+        [
+          "Apply when",
+          "A thin package is bound for pickup and several local contact options remain possible."
+        ],
+        [
+          "Decision context",
+          "Trigger: correct-identity before/after public images show that push signature, not merely a low aperture. Decision change: in a fresh episode, bind the same center, contact depth, world-down approach, destination, and ordering to the frozen thin-package opposite-jaw-sign alternative."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-027",
+      "title": "Bind alphabet soup and its basket",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Distinguish the alphabet-soup can from other groceries, then bind the intended basket's interior as the destination rather than its exterior wall."
+        ],
+        [
+          "Apply when",
+          "The task asks for alphabet soup in a basket among several visible groceries."
+        ],
+        [
+          "Decision context",
+          "Several grocery containers may be visible beside the basket. Bind the requested soup can using its visible appearance and compact upright shape. Bind a broad basket interior to its visible parent; a small edge or exterior patch does not establish the destination."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-028",
+      "title": "Bind an open drawer's interaction",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For closing an open drawer, select the frozen inward-push capability instead of a pull objective. Preserve a drawer that is already closed and assess progress from the same drawer's observed displacement."
+        ],
+        [
+          "Apply when",
+          "The requested top drawer is visibly open, the same parent-qualified handle is reachable, and the visible path from the handle toward its cabinet is clear."
+        ],
+        [
+          "Decision context",
+          "Decision change: bind the remaining goal to the frozen direct-push capability rather than grasp/pull. Order localization before the inward effect, release at the achieved endpoint without an outward retreat that could reverse closure, and judge progress from re-observed motion and retained closure of the same drawer rather than command completion. If already closed, preserve it and do not act. Disconfirming observations: a different part moves, the intended handle moves away from the cabinet, no target motion follows aligned contact, the drawer rebounds after release, or the path is obstructed. Exact contact and motion mechanics remain frozen Cerebellum concerns."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-029",
+      "title": "Bind basket interior relative to its parent",
+      "layer": "Brain",
+      "category": "destination",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind a basket's actionable interior to its parent container. An unrelated small region or exterior patch does not establish an interior destination."
+        ],
+        [
+          "Apply when",
+          "A basket is visible but its actionable interior is not yet bound."
+        ],
+        [
+          "Decision context",
+          "Proceed only when the interior mask is a broad, centered, parent-consistent region rather than a tiny rim patch. Use the parent and interior together as the destination input to the frozen basket-placement procedure. Reject or leave unresolved when the interior candidate is tiny, outside the parent, or lacks adequate public depth."
+        ],
+        [
+          "Code template",
+          "def observe_destination(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"candidates\": candidates,\n            \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-030",
+      "title": "Bind cream cheese and its tray",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For cream-cheese placement, bind the compact requested package separately from the larger wooden tray and its interior. Keep the task unresolved if the package identity or parent-interior relationship is ambiguous."
+        ],
+        [
+          "Apply when",
+          "For cream-cheese placement."
+        ],
+        [
+          "Decision context",
+          "Require relative image geometry in which the tray is substantially larger than the package and the interior occupies a meaningful part of the tray before moving. Supporting observations are a compact task-qualified target mask with coherent public depth and a broad nested tray/interior pair."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-031",
+      "title": "Bind ketchup and the wooden tray",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Identify the ketchup bottle among groceries and bind the wooden tray's interior before composing pickup and placement."
+        ],
+        [
+          "Apply when",
+          "A ketchup bottle and a wooden tray must be identified among grocery distractors."
+        ],
+        [
+          "Decision context",
+          "A can/carton match, tiny tray-edge patch, sparse depth, or non-broad interior mask disconfirms applicability and should stop or trigger re-observation."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-032",
+      "title": "Bind placement to the rim-held bowl's body",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For a rim-held bowl, retain the bowl body's relation to the plate as the placement objective. Do not substitute the hand's arrival for that object-level relation."
+        ],
+        [
+          "Apply when",
+          "For a rim-held bowl."
+        ],
+        [
+          "Decision context",
+          "For this black-bowl-on-plate task, when the applicable frozen procedure uses an asymmetric rim contact, bind placement to the bowl body rather than centering the wrist: measure the public pre-pick vector from bowl-body XY to grasp XY and command destination wrist XY as plate-center XY plus that vector. Supporting observations are that the requested bowl is retained after lift and the final bowl center remains over the plate. Disconfirming observations are bowl rotation/slip that changes the held-body offset, failed co-motion, or an unresolved plate center, in which case this pre-pick offset must not authorize descent."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-033",
+      "title": "Bind the book and the requested caddy compartment",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the requested book and the requested caddy compartment separately. The entire caddy does not resolve which interior compartment the instruction requires."
+        ],
+        [
+          "Apply when",
+          "The task names a book and a particular caddy compartment."
+        ],
+        [
+          "Decision context",
+          "Accept only masks whose public image/depth geometry is consistent with one tall upright book and one full-height caddy compartment. A missing mask, a generic multi-compartment union, implausible tall-object extent, or multiple unresolved instances calls the binding into question and must stop motion."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-034",
+      "title": "Bind the foreground cabinet's top drawer",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For opening the foreground cabinet's top drawer, bind the handle to that cabinet before choosing the opening objective. Keep repeated background handles separate from the intended drawer."
+        ],
+        [
+          "Apply when",
+          "For opening the foreground cabinet's top drawer."
+        ],
+        [
+          "Decision context",
+          "Reject high horizontal candidates associated with background cabinetry. From the current handle-to-parent face geometry, choose the outward drawer direction and order handle acquisition before monotonic opening motion. Supporting observations are selection of the foreground top handle and first-pull co-motion of that drawer with the gripper. A high/horizontal selection, invalid depth, inward motion, motion of another part, or absent first-pull co-motion calls the method into question."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-035",
+      "title": "Bind the pan body and cabinet-top destination",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For pan placement on a cabinet, bind the pan body as the object to place and the cabinet's supporting top as the destination, while the local skill chooses the handle contact."
+        ],
+        [
+          "Apply when",
+          "For pan placement on a cabinet."
+        ],
+        [
+          "Decision context",
+          "When the public instruction is to put the frying pan on top of the cabinet and RGB-D shows a graspable handle offset from the pan body plus multiple cabinet-like background surfaces, do not bind one centroid to both acquisition and placement. Command the target wrist XY as the robust cabinet-top center plus the freshly measured handle-contact minus pan-body offset. Public support is distinct geometry for all three masks, a planar destination large enough for the body, visible source separation/co-motion after lift, and stable post-release support."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-036",
+      "title": "Bind visible package faces to a grasp axis",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For the thin pudding package in the observed orientation, bind the frozen grasp to its visible opposing faces and clear downward approach. A rotated package or obstructed faces invalidate that binding."
+        ],
+        [
+          "Apply when",
+          "For the thin pudding package in the observed orientation."
+        ],
+        [
+          "Decision context",
+          "A rotated package, obstructed opposing faces, a materially displaced pre-close mask, or failure of the short-lift elevation check disconfirms applicability."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-037",
+      "title": "Carry a rim-held vessel in short segments",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a vessel held at its rim or handle, divide a long loaded translation into short segments. Reobserve the carried body above the destination before the descent."
+        ],
+        [
+          "Apply when",
+          "Long pick-and-place transports for rim-, handle-, or edge-held objects."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a narrow rim grasp survives lift but slips during one long horizontal move, or the wrist reaches the target while the asymmetrically held object is off-center. Move at constant safe height through short interpolated waypoints (about 5 cm), then reobserve at the high target waypoint. Estimate the held object's actionable body center from a robust top slice, compute target minus held-object XY, reject implausible residuals, and apply conservative proportional corrections with remeasurement."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-038",
+      "title": "Center an asymmetrically held object",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When an object is held asymmetrically, use the body's observed relation to the destination to judge alignment. Reaching the destination with the hand does not establish body alignment."
+        ],
+        [
+          "Apply when",
+          "Books/cards into caddies and also edge-held trays, packages, or tools entering bins, shelves, and holders."
+        ],
+        [
+          "Decision context",
+          "Failure signature: an asymmetrically or edge-grasped object remains retained and the wrist reaches the nominal target, but final descent contacts an adjacent wall or the object lands across neighboring compartments because the held body is offset from the wrist. Apply delta to the high wrist pose, descend vertically, and use contact-aware release/settling. Bound delta at the scale of the full transport, not a local correction."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-039",
+      "title": "Check realized clearance during lift",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When a larger lift causes a lateral excursion, preserve the completed lift and replace only the failed suffix with shorter monotonic upward moves."
+        ],
+        [
+          "Apply when",
+          "When a larger lift causes a lateral excursion."
+        ],
+        [
+          "Decision context",
+          "The object remains with the hand through early lifting, but a larger final upward move sends the hand sideways. Preserve the height already reached and replace only the failed suffix with shorter monotonic upward moves. Stop before a discontinuous motion and use a lower transit height when the scene still provides sufficient clearance."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-040",
+      "title": "Check realized pose before continuing",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Before a low contact, stage above the selected location and descend through short local steps. Check the realized hand pose before closing."
+        ],
+        [
+          "Apply when",
+          "Low tabletop pickups and low articulated contacts."
+        ],
+        [
+          "Decision context",
+          "Verify realized pose or contact before closing."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-041",
+      "title": "Check retention before a long basket transfer",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Before a long basket transfer, establish that the requested object has been acquired. Keep the remaining transport objective pending when retention is unresolved."
+        ],
+        [
+          "Apply when",
+          "Before a long basket transfer."
+        ],
+        [
+          "Decision context",
+          "Require public named-box co-motion: the compact box geometry must rise from its prior support and remain hand-associated. If the box stays at the source, another item moves, or all public views are inconclusive, halt and preserve the reached state without replaying acquisition."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-042",
+      "title": "Check stacking progress from the current scene",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "After a bowl has reached its support bowl, preserve the completed pickup and carry. Gate only the remaining descent and release on fresh evidence that the same bowl is still elevated at the destination."
+        ],
+        [
+          "Apply when",
+          "After a bowl has reached its support bowl."
+        ],
+        [
+          "Decision context",
+          "Continue only when the elevated source remains with the tool over the destination, otherwise stop without repicking. Supporting observation: a plausible elevated bowl mask near the tool and above the destination. Disconfirming observation: the source is resting, separated, associated with the wrong destination, or too occluded to decide."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-043",
+      "title": "Check the first lift before loaded transport",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For the selected red mug, check the first lift's observed elevation before authorizing the remaining transport. Keep the destination undisturbed while resolving acquisition."
+        ],
+        [
+          "Apply when",
+          "For the selected red mug."
+        ],
+        [
+          "Decision context",
+          "For this task, after one close and the first short lift of the selected red mug, do not authorize the remaining lift and transport from command completion or gripper aperture alone. A mug remaining on its support, separating from the hand, an unresolved/inconsistent mask, or destination motion disconfirms progress and requires preserving the actual scene and stopping before long transport."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-044",
+      "title": "Choose the grasp input from local clearance",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the selected soup can to the local grasp option that fits its present approach clearance. Preserve the object and destination bindings when choosing that option."
+        ],
+        [
+          "Apply when",
+          "A selected soup can has limited approach clearance near neighboring objects."
+        ],
+        [
+          "Decision context",
+          "Stop before motion when bilateral clearance is not visible."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-045",
+      "title": "Clear a raised receptacle during transport",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a raised receptacle, establish clearance for the held object's lowest extent before moving across the rim. Observe the high destination alignment before beginning a vertical descent."
+        ],
+        [
+          "Apply when",
+          "Object-in-basket/bin placement and placement over raised fixtures."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a nominal high waypoint silently produces no useful motion, or the wrist arrives high while the held object's bottom clips and displaces a raised target. Split transport into an intermediate high waypoint and a high target waypoint. Once centered with clearance, descend vertically, release, and retreat vertically. This prevents the next low command from becoming a diagonal collision after a failed high move."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-046",
+      "title": "Clear the inner finger after release",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "After releasing a rim-held vessel, an inner finger may still hook the rim. Establish support and clear the engaged finger toward the visible exterior before lifting it away."
+        ],
+        [
+          "Apply when",
+          "Rim-held vessels placed on surfaces or into containers."
+        ],
+        [
+          "Decision context",
+          "Failure signature: after opening a one-finger-inside/one-outside rim grasp, the inside finger remains in the vessel. Vertical retreat hooks the rim and lifts the object back off the target, while staying still leaves it mechanically supported by the robot. Seat the vessel before opening, then extract at contact height toward the exterior side of the selected rim before any upward retreat, and settle only after the finger is clear."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-047",
+      "title": "Close a hinged panel along its arc",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Push"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a hinged panel, distinguish the closing direction from the opening direction using the panel's observed response. Follow the visible hinge arc with local contacts and preserve the achieved closure."
+        ],
+        [
+          "Apply when",
+          "Microwave, oven, cabinet, and similar hinged doors."
+        ],
+        [
+          "Decision context",
+          "After lowering, a first displacement may instead increase the opening angle. Preserve observed XY and explicit tool axes, lower contact in measured increments until the pads visibly overlap the panel, then use a small diagnostic displacement to identify the closing tangent."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-048",
+      "title": "Close a slider with compact pushes",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Push"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For monotonic slider closure, a compact closed-finger contact can move the panel without acquiring its handle. Preserve useful displacement when a stroke stops short."
+        ],
+        [
+          "Apply when",
+          "Closing drawers, sliding trays, and prismatic cabinet panels when the goal direction is a monotonic push."
+        ],
+        [
+          "Decision context",
+          "Repair: keep the last collision-free public-depth surface pose. Close the fingers there to form a compact rigid pusher rather than requiring retention."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-049",
+      "title": "Compensate an off-center grasp",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When the contact is away from an object's center, judge placement using the carried body and the intended support rather than the hand alone."
+        ],
+        [
+          "Apply when",
+          "Pans and other handled vessels, edge-grasped trays, and tools."
+        ],
+        [
+          "Decision context",
+          "Failure signature: an asymmetrically grasped object's wrist reaches the target while its functional body remains offset, or the direct compensated wrist pose is near the workspace limit. Before pickup, estimate grasp-point and body centers from public depth. Set release Z by preserving the measured contact-to-bottom height above the target top. Verify retention after lift before rotating or transporting."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-050",
+      "title": "Confirm acquisition before lifting",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a small rigid object, inspect where the finger pads meet its side faces. Correct an above-body or below-body contact before extending the lift and transport."
+        ],
+        [
+          "Apply when",
+          "Top-down grasps of small rigid objects in stacking, sorting, or pick-and-place."
+        ],
+        [
+          "Decision context",
+          "Repair: inspect the close image for the actual dark contact pads. If they end above or below the object's side faces, adjust the hand target incrementally along the explicit observed approach axis. Otherwise stop or recover the failed suffix."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-051",
+      "title": "Confirm mug retention from current evidence",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Use current evidence to decide whether the requested mug remains acquired before continuing its task. Do not advance the task merely because a hand command completed."
+        ],
+        [
+          "Apply when",
+          "A mug contact has occurred but continued retention is unresolved."
+        ],
+        [
+          "Decision context",
+          "Decision change: execute only the first short planned lift, re-segment the same task-qualified mug, and authorize the remaining transport only when public depth shows a plausible upward median-Z change with limited planar drift. After the single release and full clearance, re-segment again and require the mug center inside the initially selected right-plate bounds with its bottom near support. Preserve the actual scene and stop without replaying the completed prefix when either gate fails. Disconfirming observations: the target remains on its old support, fails to track the first lift, shifts too far in XY, changes semantic identity, or finishes outside the selected plate bounds."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-052",
+      "title": "Contact the body of a short cylinder",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a short cylinder, select opposing body surfaces rather than a contact above the lid. Ground the approach in the object's visible body geometry."
+        ],
+        [
+          "Apply when",
+          "Cans, jars, short bottles, and cylindrical cartons in container- or surface-placement tasks."
+        ],
+        [
+          "Decision context",
+          "Estimate XY from a robust extreme-top slice and body contact height from a middle public-depth band."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-053",
+      "title": "Disambiguate a butter package",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Distinguish the requested butter package from similarly shaped groceries using its visible appearance and task context before binding pickup."
+        ],
+        [
+          "Apply when",
+          "A butter package appears among similarly shaped groceries."
+        ],
+        [
+          "Decision context",
+          "Refuse action if another candidate is close in score. Apply the existing acquisition only after that distinction, then continue to carry only if a small probe lift produces fresh public RGB-D evidence that the requested carton is elevated/co-moving and absent from its source."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-054",
+      "title": "Disengage from a close-fitting receptacle",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "In a close-fitting receptacle, plan how the open fingers can leave the object without catching its rim or the surrounding walls. Preserve the placed object's support during disengagement."
+        ],
+        [
+          "Apply when",
+          "Books/cards entering caddies or bins and tools/utensils entering holders."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a narrow object is retained and the wrist reaches a close-fitting receptacle, but opening deflects the object against the walls or leaves it wedged because the initial commanded grasp-to-bottom offset differs from the achieved held-body offset."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-055",
+      "title": "Distinguish a milk carton from distractors",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the requested milk carton by its package appearance and shape. Reject a different grocery item even when it occupies a convenient contact location."
+        ],
+        [
+          "Apply when",
+          "The requested milk carton appears among other grocery items."
+        ],
+        [
+          "Decision context",
+          "Multiple eligible milk masks, a non-upright mask, sparse depth, or disagreement with the visible label calls the binding into question and should stop motion."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-056",
+      "title": "Distinguish a stove knob from cookware parts",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For a stove-control task, bind the stove's raised control separately from cookware handles and other nearby parts."
+        ],
+        [
+          "Apply when",
+          "For a stove-control task."
+        ],
+        [
+          "Decision context",
+          "Disconfirming observation: no substantial burner-associated candidate, multiple equally plausible appliance controls, or incoherent RGB-D geometry should leave the referent unresolved."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-057",
+      "title": "Distinguish basket facade from opening",
+      "layer": "Brain",
+      "category": "destination",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Distinguish a basket's exterior facade from the opening used for placement. Keep the destination tied to the supporting interior."
+        ],
+        [
+          "Apply when",
+          "The basket facade can be confused with its placement opening."
+        ],
+        [
+          "Decision context",
+          "Keep the interior as a separate opening role. The public trigger is competing parent masks with materially different extent. Support is the larger mask enclosing the broad opening and body, while lack of parent-interior overlap, implausible image scale, or no visible boundary calls the decision into question and requires stopping."
+        ],
+        [
+          "Code template",
+          "def observe_destination(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"candidates\": candidates,\n            \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-058",
+      "title": "Distinguish support contact from free motion",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Distinguish the intended final support contact from free-space motion. Observe whether the object has reached its support before deciding how to release it."
+        ],
+        [
+          "Apply when",
+          "Object-on-shelf/surface placement and shallow container seating."
+        ],
+        [
+          "Decision context",
+          "Failure signature: all free-space transport waypoints realize correctly and the object visibly reaches its support, but the final lowering pose deviates under intended contact and a generic pose checker aborts before release. Keep strict realized-pose checks for collision-clear motion."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-059",
+      "title": "Distinguish the moka pot from similar objects",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Identify the requested moka pot as a complete task entity before binding its actionable part. Do not substitute another dark or metallic kitchen object."
+        ],
+        [
+          "Apply when",
+          "A moka pot must be distinguished from other dark or metallic kitchen objects."
+        ],
+        [
+          "Decision context",
+          "Bind 'stove' to a geometry-valid circular support from 'stove burner' or 'burner', rather than an arbitrary appliance/counter patch. Call the method into question if no compact candidate exists, public depth is inconsistent with an upright moka, or no bounded burner support is observed."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-060",
+      "title": "Distinguish the requested white mug",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Use the requested white mug's visible appearance and vessel geometry to distinguish it from other cups or background regions."
+        ],
+        [
+          "Apply when",
+          "A requested white mug must be distinguished from other cups or background regions."
+        ],
+        [
+          "Decision context",
+          "Disconfirming observations: do not apply this method when no geometry-valid qualified body/handle pair exists, the selected body does not co-move on the first lift, the plate is unresolved, or the final mug base is visibly outside the plate."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-061",
+      "title": "Engage the sides of a thin object",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a thin object, position the opposing pads against its side surfaces. Contact on or above the top face alone may push the object without acquiring it."
+        ],
+        [
+          "Apply when",
+          "Flat boxes, packets, cards, and similarly low objects in pick-to-container or pick-to-surface tasks."
+        ],
+        [
+          "Decision context",
+          "Keep the observed center, depth, and downward approach fixed."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-062",
+      "title": "Establish contact before rotating",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Rotate"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Establish a contact that visibly engages the rotary control before attempting its turn. Motion of the hand alone does not establish motion of the control."
+        ],
+        [
+          "Apply when",
+          "Knobs and other small tabletop controls where nominal TCP offsets do not yield contact."
+        ],
+        [
+          "Decision context",
+          "Preserve XY and explicit observed tool axes, change only the requested contact height in measured increments, and verify physical effect in images. If the visual goal is already achieved, gate or omit later waypoints because over-rotation or slip can undo success."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-063",
+      "title": "Gate traversal on the first lift's evidence",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "At the pickup-to-transport boundary, require supported acquisition of the requested source before beginning a long traversal. Keep the remaining task pending when the first lift is unresolved."
+        ],
+        [
+          "Apply when",
+          "At the pickup-to-transport boundary."
+        ],
+        [
+          "Decision context",
+          "Reobserve with public RGB-D and continue only when the same qualified red-mug mask has materially risen from its prior support while remaining within a bounded planar association to the pickup line. If it stays behind, changes identity, or cannot be associated confidently, stop and preserve the actual scene without repeating the grasp."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-064",
+      "title": "Grasp a thin tabletop package",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a thin tabletop package, choose visible opposing edges with enough access for the finger pads. Keep the approach aligned with those edges."
+        ],
+        [
+          "Apply when",
+          "Thin boxes, packets, and cards."
+        ],
+        [
+          "Decision context",
+          "From public depth, take a robust top height and robust XY-bound midpoint. Select explicit observed world-frame jaw and downward approach axes. Lower contact in measured increments until the pads overlap the object sides."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-065",
+      "title": "Grasp the material around an open ring",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an open ring, acquire the visible material surrounding the opening. Keep the ring's aperture distinct from the solid contact region."
+        ],
+        [
+          "Apply when",
+          "Nuts, rings with handles, keyed washers, and other apertured parts with a solid protrusion."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a gripper closes over a ring-shaped object's mask centroid and the post-lift image shows the object unmoved, because the centroid is an empty aperture. Or it reaches a tab but closes along the tab length. Do not use PCA or a grasp generator."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-066",
+      "title": "Grasp with nearby clutter",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "In clutter, choose a contact whose opening, approach and lift corridors remain clear of neighboring objects. Preserve the selected object identity through contact."
+        ],
+        [
+          "Apply when",
+          "Cans, jars, cartons, tools, and other objects in tight clutter."
+        ],
+        [
+          "Decision context",
+          "Failure signature: SAM and depth give the correct compact-object center, but the final open-finger descent displaces a neighboring package, the realized low pose deflects, and closure reaches the air value."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-067",
+      "title": "Ground contact in visible body geometry",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Ground the contact in the observed body of the requested object. Keep the chosen contact direction tied to visible surfaces rather than an unexamined nominal center."
+        ],
+        [
+          "Apply when",
+          "A fixed camera sees mainly one face of an opaque pot, bottle, box, or similar volume and the grasp center was derived from visible mask points."
+        ],
+        [
+          "Decision context",
+          "Preserve the chosen explicit jaw and approach axes, height, and later trajectory. Along the jaw axis, measure robust visible bounds and shift the center toward the occluded half by a bounded fraction of the visible span."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-068",
+      "title": "Identify pudding among branded packages",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Distinguish the requested pudding package among branded groceries using the visible package identity and geometry, before selecting its local manipulation skill."
+        ],
+        [
+          "Apply when",
+          "A requested pudding package appears among branded grocery distractors."
+        ],
+        [
+          "Decision context",
+          "Continue only when the package mask is compact, the plate mask is materially broader, and both have coherent public depth."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-069",
+      "title": "Identify the alphabet-soup can",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Identify the alphabet-soup can using the instruction and visible label-bearing package. Keep other soup cans and bottles as separate candidates."
+        ],
+        [
+          "Apply when",
+          "Several cans or bottles could be mistaken for the requested alphabet soup."
+        ],
+        [
+          "Decision context",
+          "Several compact upright cans can match the requested soup category. The selected can must also agree with the visible color and label-bearing appearance. If the candidate is absent, duplicated, or hidden by foreground clutter, leave the referent unresolved before pickup."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-070",
+      "title": "Identify the back bowl by current image order",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Use the stable camera's relative image order to identify the back bowl among visibly similar bowls. Apply the relation only while the current viewpoint supports that ordering."
+        ],
+        [
+          "Apply when",
+          "The instruction asks for the black bowl at the back while several visually similar black bowls and one plate are visible from the task's stable public camera."
+        ],
+        [
+          "Decision context",
+          "Decision change: enumerate generic 'black bowl' masks, reject thin, flat, or duplicate detections using public image/depth geometry, order the remaining full bowl instances by camera-relative tabletop depth, choose the farthest as the referent, and bind the sole geometry-valid 'plate' detection as destination. Disconfirming observations: a changed viewpoint, a missing/occluded bowl candidate, a geometry-valid distractor farther from the camera, or post-lift motion of a different object invalidates the decision."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-071",
+      "title": "Identify the chocolate-pudding package",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the requested chocolate-pudding package using its visible appearance and thin package geometry before composing pickup and placement."
+        ],
+        [
+          "Apply when",
+          "A chocolate-pudding package and tray must be bound before pickup."
+        ],
+        [
+          "Decision context",
+          "This changes the decision from generic object/category selection to task-noun-first binding."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-072",
+      "title": "Identify the front bowl by current image order",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For the front bowl, use the bowls' current relative image positions. Reconsider the binding after a viewpoint change, occlusion or object movement."
+        ],
+        [
+          "Apply when",
+          "For the front bowl."
+        ],
+        [
+          "Decision context",
+          "The decision is called into question if candidate boxes are not comparable, the closest bowl is not greatest-row under the current public camera, or no geometry-valid instance exists. Evidence is program-level and does not isolate this decision causally."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-073",
+      "title": "Identify the left bowl among similar bowls",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Among distinct plausible bowls, bind the image-left instance when the instruction asks for the left bowl. Leave the binding unresolved when occlusion or the view prevents a reliable ordering."
+        ],
+        [
+          "Apply when",
+          "At least two plausible bowl detections are visible in the current public agent view."
+        ],
+        [
+          "Decision context",
+          "Call the method into question when occlusion, a changed view, or candidate geometry prevents a reliable relative image order."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-074",
+      "title": "Identify the requested red mug",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the red mug and the appearance-qualified plate requested by the task. Associate any selected mug handle or rim with that same mug."
+        ],
+        [
+          "Apply when",
+          "The task qualifies both a red mug and its target plate by appearance."
+        ],
+        [
+          "Decision context",
+          "Use parent-qualified 'red mug handle' and 'rim of red mug' only after requiring their image boxes to overlap the selected red-mug parent."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-075",
+      "title": "Insert and disengage in a narrow cubby",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Grasped insertion",
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a thin object entering a narrow cubby, align the body with the opening at a clear height before insertion. Consider how the open fingers will disengage without pulling it back out."
+        ],
+        [
+          "Apply when",
+          "Books or cards entering shelves and thin packages or tools entering low cubbies/close-fitting holders."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a genuinely retained tall thin object reaches a low shelf/cubby entrance but stalls, pivots, or is pulled back out during release/retreat. At collision-clear height, rotate the held object incrementally so its broad face fits the opening."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-076",
+      "title": "Insert through a shelf entrance",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Grasped insertion",
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For shelf insertion, stage outside the opening and keep the carried object between the visible support and roof. Separate the inward insertion from the final seating motion."
+        ],
+        [
+          "Apply when",
+          "Pans or trays entering shelves and to books, packages, or tools entering cubbies/holders."
+        ],
+        [
+          "Decision context",
+          "Compute insertion height from the detected shelf plane, grasp-to-object-bottom offset, and a clearance that still fits below the detected roof. Then lower vertically to the seated height. After opening, extract along the grasped part toward the opening before any upward retreat so open fingers do not continue supporting or hook the object."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-077",
+      "title": "Keep held state provisional until supported",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Keep held state provisional after an ambiguous bowl acquisition. Continue transport only when the same bowl visibly rises with the hand and separates from its former support."
+        ],
+        [
+          "Apply when",
+          "A bowl has been contacted but its acquisition is still ambiguous."
+        ],
+        [
+          "Decision context",
+          "For the public situation 'put the black bowl on the plate' when rim closure leaves acquisition ambiguous, keep the held-state decision provisional. After one minimal upward probe, re-identify the task-qualified black bowl in fresh public RGB-D and continue only if it rises with the hand and separates from its former support. Staying behind, separation from the hand, or unresolved re-identification calls the decision into question and stops transport. After observed co-motion supports retention, do not revoke held state solely because aperture drifts slightly across a fixed threshold."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-078",
+      "title": "Localize a raised control tab",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a raised control on a larger fixture, bind the raised actionable feature separately from its base. The full fixture's visible center may not identify the contact region."
+        ],
+        [
+          "Apply when",
+          "Raised knobs, latches, and handled controls."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a full-object mask centroid is biased by a base or surrounding fixture when the actionable feature is a raised tab."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-079",
+      "title": "Localize the top of a tall post",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a tall post seen obliquely, distinguish its top from the projected side before choosing the insertion target."
+        ],
+        [
+          "Apply when",
+          "Pegs, posts, bottle necks, and other vertical insertion targets seen obliquely."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a tall post's 2-D box center or full 3-D mask center produces a repeatable millimetric placement bias because the mask includes a projected side face. For apertured source objects, require the expected enclosed-hole topology before accepting a high-scoring candidate."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-080",
+      "title": "Lower a vessel into a bounded receptacle",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When a held vessel tips during the final descent into a bounded receptacle, examine interference with the floor and walls before lowering further. Compare the pre-release and settled object states."
+        ],
+        [
+          "Apply when",
+          "Bowls/cups into trays and irregular objects into bins."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a vessel is upright at a high target waypoint but tips while still held during the final descent into a slatted, raised, or close-fitting container. Preserve target XY and grasp orientation, raise only the release pose until the held object's bottom clears obstructing floor features or walls, open there, omit contact-forcing motions, and allow several stationary observations for gravity settling. Confirm the repair by comparing the last pre-release image with the settled image."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-081",
+      "title": "Match a two-tone mug to the right plate",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Identify the requested two-tone mug and bind the plate on the task-specified right side. Resolve object appearance and the destination relation together."
+        ],
+        [
+          "Apply when",
+          "This task presents three mugs and two similar striped plates under the instruction to put the yellow and white mug on the right plate."
+        ],
+        [
+          "Decision context",
+          "Do not use the ambiguous generic striped-plate result. Disconfirming observations: a qualified part outside the parent-relative region, a degenerate handle-to-rim direction, an ambiguous right-plate mask, or post-lift perception of a different target must reject the binding."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-082",
+      "title": "Match the red mug to the right plate",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Resolve the red-mug qualifier and the right-plate relation before pickup. Multiple plausible mugs or an unresolved plate relation block the dependent action."
+        ],
+        [
+          "Apply when",
+          "The task specifies a red mug and a right-side plate among alternatives."
+        ],
+        [
+          "Decision context",
+          "When this task presents several mugs and two similar plates and the public instruction says to put the red mug on the right plate, change the binding decision from generic category ranking to qualifier-first grounding: query a red-mug-specific description and a right-plate-specific description, require strong geometry-valid masks, and only then bind the frozen pick/place procedures. The supporting public observation is one distinct red-mug mask plus one destination mask consistent with the image-relative right relation."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-083",
+      "title": "Match the white mug to the left plate",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the white mug and the left plate from the current view. Keep the requested appearance and left-right relation distinct from generic object categories."
+        ],
+        [
+          "Apply when",
+          "The instruction specifies a white mug and the left plate."
+        ],
+        [
+          "Decision context",
+          "Supporting observations are a broad mug mask consistent with the separately visible rim/handle and a broad plate mask on the image-left side. Call the method into question if these masks are missing, cross-inconsistent, select another mug, or do not distinguish the left plate."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-084",
+      "title": "Measure the interior of an open container",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an open container, distinguish the interior support from the rim and visible walls. Use the supporting region that is actually visible inside the container."
+        ],
+        [
+          "Apply when",
+          "For an open container."
+        ],
+        [
+          "Decision context",
+          "Failure signature: an open drawer, bin, or tray is correctly segmented, but using the full-mask point median targets a visible wall or using the mask top causes a high release that bounces the object outside. Apply this to object-in-drawer and object-in-open-container tasks when the semantic mask includes a support floor plus vertical walls. From public depth, isolate the dense lowest plausible horizontal Z band, sanity-check that it contains enough points, compute interior XY as the midpoint of trimmed bounds of that band, and set release height by adding the measured grasp-to-object-bottom offset plus a small clearance to the floor height. Keep transport above the walls and make the final descent vertical."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-085",
+      "title": "Open a hinged door by handle or pusher",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Push",
+        "Pull / handle opening"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a hinged door, associate the handle with the correct panel and follow that panel's visible hinge motion. A partial opening alone does not establish the requested fully open state."
+        ],
+        [
+          "Apply when",
+          "Microwaves, ovens, and hinged cabinet doors with a visible handle and vertical hinge."
+        ],
+        [
+          "Decision context",
+          "Segment the semantic parent plus a parent-qualified handle. Estimate the hinge at the robust parent edge opposite the handle. Acquire the handle or close into a compact pusher, then advance the contact around the hinge radius in short monotonic angular waypoints while rotating the jaw axis with the door."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-086",
+      "title": "Order bottle transport around drawer clearance",
+      "layer": "Brain",
+      "category": "sequence",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "After acquiring the upright bottle, inspect the high route over the drawer. When the current orientation already fits, transfer directly instead of inserting an unnecessary reorientation."
+        ],
+        [
+          "Apply when",
+          "After acquiring the upright bottle."
+        ],
+        [
+          "Decision context",
+          "After this task's upright bottle is visibly acquired and lifted above the tabletop and drawer rim, inspect the public scene for a clear high translation corridor. If the acquisition orientation already fits that corridor, omit any wrist-roll/reorientation and transfer directly at the unchanged explicit tool axes before descending vertically. The trigger is a retained upright bottle plus a clear high route. The decision changes from an unconditional post-lift roll to direct transport."
+        ],
+        [
+          "Code template",
+          "def observe_next_objective(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-087",
+      "title": "Orient an elongated object in a shallow tray",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an elongated object in a shallow receptacle, compare its projected length with the available interior. Choose an orientation that keeps both ends within the cavity during release."
+        ],
+        [
+          "Apply when",
+          "Bottles, tools, cartons, and utensils placed in shallow drawers, trays, or bins."
+        ],
+        [
+          "Decision context",
+          "Failure signature: an elongated object is securely transported to a shallow receptacle, but upright release leaves its center above the rim, while a fully horizontal wall-adjacent release deflects or loses it outside. Compare observed object length with floor-to-rim depth. Set release height from floor plus observed radius plus the remaining vertical half-length projection and small relative clearance. Open while both projected endpoints remain within trimmed cavity bounds, allow stationary settling so gravity completes the lay-down, then clear the empty hand."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-088",
+      "title": "Pinch an open vessel at its rim",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an open vessel, use the solid rim wall as the contact region. Choose an accessible side instead of directing both fingers into the empty interior."
+        ],
+        [
+          "Apply when",
+          "Bowls, cups, and other open vessels whose rim can be pinched."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a vessel is too wide for a full exterior pinch, or a nominal center grasp closes in air. When evidence shows the motion API already realizes the tool/contact offset, command the observed rim contact height directly instead of adding another wrist offset."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-089",
+      "title": "Place inside an open drawer",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When a drawer front hides part of its floor, use the visible drawer structure to distinguish the opening from the front wall. Keep the intended interior and support separate from the handle."
+        ],
+        [
+          "Apply when",
+          "Objects placed in open drawers, deep trays, and bins whose front wall occludes part of the floor."
+        ],
+        [
+          "Decision context",
+          "Use the dense low receptacle band for support Z and the unoccluded lateral coordinate. On the occluded depth axis, center from robust bounds of the full receptacle structure so both back and front are represented. Preserve grasp-minus-body XY, descend vertically until the measured object bottom is just above the floor, open, extract at contact height toward the exterior grasp side, and settle."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-090",
+      "title": "Place the object body, not the wrist",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a vessel held at its rim or handle, observe the carried body above its support before release. A centered wrist does not guarantee a centered vessel."
+        ],
+        [
+          "Apply when",
+          "Rim, handle, edge, and other asymmetric grasps across vessel-placement and object-in-container tasks."
+        ],
+        [
+          "Decision context",
+          "Failure signature: the hand reaches the target center but an object held off-center lands adjacent to the target, especially when realized wrist yaw changes during transport."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-091",
+      "title": "Preserve object identity after placement",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "After package placement, retain the identity of the manipulated object when assessing the final relation. A nearby similar package cannot stand in for the object that was moved."
+        ],
+        [
+          "Apply when",
+          "After package placement."
+        ],
+        [
+          "Decision context",
+          "From one fresh public frame, enumerate geometry-plausible cream-cheese candidates, bind the candidate spatially continuous with the commanded release region, and compare it with a wooden-tray candidate from that same frame. Preserve the released scene and make no recovery motion. Supporting observations are a target-shaped candidate near the release region within the current tray footprint and separation from the open gripper. Disconfirming observations are no plausible nearby candidate, several similar candidates near the tray, or a current tray mask inconsistent with the release. Completion then remains unresolved rather than falling back to score."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-092",
+      "title": "Preserve progress during slider contact",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Push"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "After partial slider motion, rebind the shifted part using its observed displacement and parent relationship. Continue the unsatisfied closure objective without repeating a completed prefix."
+        ],
+        [
+          "Apply when",
+          "After partial slider motion."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a prismatic drawer, sliding tray, or panel moves usefully during a continuous push but stalls before seating, and an outward disengagement can hook the handle and reverse the achieved motion. Apply this to drawer closing and other monotonic slider-closing tasks. Apply a fresh short monotonic stroke with explicit observed tool axes. At the seated endpoint, open and remain stationary."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-093",
+      "title": "Reduce visible-side bias in object geometry",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an obliquely viewed flat-topped object, distinguish its top face from visible side faces when selecting the local contact region."
+        ],
+        [
+          "Apply when",
+          "Obliquely viewed cubes, blocks, boxes, and other flat-topped rigid objects."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a full segmentation cloud or 2-D box center is biased by visible side faces, causing a compact object's grasp or placement XY to drift. Estimate object scale from the same robust top-face spans rather than using scene-specific absolute XY."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-094",
+      "title": "Refresh support height before stacking",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "After moving the base of a stack, reobserve the base and the new supporting surface before placing the next object. Do not reuse the earlier scene's support height."
+        ],
+        [
+          "Apply when",
+          "Restacking and uniform-block stacking after a preceding contact changes the scene."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a stack placement uses a hard-coded or stale Z and the carried equal-size object collides with the base or releases at the wrong level. Repair: before manipulation, measure the robust vertical center separation of the original equal-size stack. Retract vertically after opening and settle before evaluating. This transfers height from an observed relation rather than a scene-specific absolute coordinate."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-095",
+      "title": "Reject implausible segmentation patches",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Reject a small background patch when its visible shape and extent do not match the requested object. A confident detection alone does not resolve the task referent."
+        ],
+        [
+          "Apply when",
+          "A candidate region may be a background patch rather than the requested object."
+        ],
+        [
+          "Decision context",
+          "Repair: filter all masks for relative image geometry before ranking (for example, sufficient image-relative height, tall aspect ratio, and foreground placement), then choose the highest score among eligible masks and validate its public-depth extent."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-096",
+      "title": "Release inside a receptacle opening",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an open receptacle, select the interior opening separately from a prominent near wall. Approach the interior from above after clearing the rim."
+        ],
+        [
+          "Apply when",
+          "Baskets, bins, and deep open containers."
+        ],
+        [
+          "Decision context",
+          "Failure signature: using the median of a full open-container mask releases onto a visible near wall, or an object placed below the rim remains supported by the robot. Move to a safe high waypoint, descend centrally below the rim, open, retreat vertically to the high waypoint, then allow settling. Keep the descent vertical after high transport to avoid rim collisions."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-097",
+      "title": "Release near the interior support",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a rigid object entering a tray or bin, distinguish the interior support from the rim. Releasing above an obstacle can deflect the object away from the intended interior."
+        ],
+        [
+          "Apply when",
+          "Cans/bottles into trays and rigid objects into bins."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a correctly retained rigid object is centered above a raised or slatted open receptacle, but opening above the rim lets it bounce or deflect outside."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-098",
+      "title": "Release within a close-fitting container",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a close-fitting holder, consider the clearance needed by the opening fingers. Keep release and disengagement from deflecting the object onto the rim."
+        ],
+        [
+          "Apply when",
+          "For a close-fitting holder."
+        ],
+        [
+          "Decision context",
+          "Failure signature: a narrow object is centered over a close-fitting container, but opening while inserted deflects the hand against the walls, or a later retreat hooks the released object onto the rim. When to apply: books/cards into bins or caddies and narrow tools/utensils into holders. Repair: estimate object bottom and grasp height from public depth, compute the grasp-to-bottom offset, command a release pose that leaves the object bottom slightly above the observed rim while the fingers remain outside, open, omit retreat, and allow stationary settling."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-099",
+      "title": "Reorient an elongated object for placement",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an elongated object, separate acquisition from placement orientation. Use a clear transport position to reorient the retained body toward the destination's long axis."
+        ],
+        [
+          "Apply when",
+          "Bottles, tools, cartons, or similar elongated objects must move from an easy pickup orientation to a rack, tray, shelf, or horizontal holder."
+        ],
+        [
+          "Decision context",
+          "Repair: infer the support long axis from robust public-depth extents/plane geometry. If needed, first roll the held object about its current long axis in short steps to obtain a jaw axis orthogonal to the desired final approach."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-100",
+      "title": "Require supported pickup before transport",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Keep the pudding package's remaining transport objective pending until the requested package is supported as acquired. Preserve its task identity through the first lift."
+        ],
+        [
+          "Apply when",
+          "The pudding package has been contacted but acquisition remains unresolved."
+        ],
+        [
+          "Decision context",
+          "For this task after the visually selected package approach, do not treat closure or aperture alone as completed pickup. This changes the progress decision from command-completed to perception-supported acquisition. No matched control isolates this gate from the bundled grasp-sign and lift-step changes."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-101",
+      "title": "Require visual support before basket transport",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Before basket transport, use current visual evidence to support acquisition of the requested source. Stop the dependent transport when the object remains at its original support or its identity is unresolved."
+        ],
+        [
+          "Apply when",
+          "Before basket transport."
+        ],
+        [
+          "Decision context",
+          "On refutation or unresolved re-identification, preserve the actual shifted scene and stop before transport. Call the rule into question when arm occlusion prevents reliable re-identification."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-102",
+      "title": "Resolve a destination to the right of the caddy",
+      "layer": "Brain",
+      "category": "destination",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For a destination to the right of the caddy, resolve the relation to the visible parent caddy. Keep that destination separate from the caddy's own compartments."
+        ],
+        [
+          "Apply when",
+          "The instruction says to place the yellow-and-white mug to the right of the caddy, and fresh RGB-D shows the mug starting at a different fore-aft depth or only marginally beyond the caddy edge."
+        ],
+        [
+          "Decision context",
+          "Trigger: robust complete-object masks do not yet show the mug wholly camera-right and fore-aft aligned."
+        ],
+        [
+          "Code template",
+          "def observe_destination(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"candidates\": candidates,\n            \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-103",
+      "title": "Resolve a slatted tray's supported interior",
+      "layer": "Brain",
+      "category": "destination",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For a slatted tray, bind the supported interior within the parent rather than the lower surface visible through gaps. Keep placement unresolved when no coherent interior is visible."
+        ],
+        [
+          "Apply when",
+          "For a slatted tray."
+        ],
+        [
+          "Decision context",
+          "Decision change: bind the actionable destination region to the coherent dense raised interior band inside the parent and reject the lower gap returns. Stop as unresolved if the inset is not parent-consistent or no coherent band exists. Disconfirming/non-applicability observations: no distinct inset, no coherent raised band, inconsistent parent overlap, heavy occlusion, or a solid-bottom tray where the lowest coherent plane is the real interior."
+        ],
+        [
+          "Code template",
+          "def observe_destination(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"candidates\": candidates,\n            \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-104",
+      "title": "Resolve butter without confidence-only ranking",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Use package appearance and geometric plausibility to bind the requested butter. A confident but visually inconsistent region does not establish the task referent."
+        ],
+        [
+          "Apply when",
+          "The requested butter competes with visually similar grocery packages."
+        ],
+        [
+          "Decision context",
+          "The trigger is ambiguity among similarly shaped packages."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-105",
+      "title": "Resolve foreground versus background cabinet",
+      "layer": "Brain",
+      "category": "destination",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Resolve whether the instruction refers to foreground furniture or background cabinetry before choosing its actionable surface."
+        ],
+        [
+          "Apply when",
+          "The instruction says cabinet while the RGB view contains both a compact foreground drawer cabinet and background kitchen cabinetry."
+        ],
+        [
+          "Decision context",
+          "Trigger: generic cabinet segmentation ranks broad background cabinets or a non-actionable face. Leave the destination unresolved rather than accepting a tiny patch or background region. Disconfirming observation: the selected mask lies on background cabinetry, is a small edge/face, lacks a coherent horizontal plane, or does not provide bowl-footprint margin."
+        ],
+        [
+          "Code template",
+          "def observe_destination(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"candidates\": candidates,\n            \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-106",
+      "title": "Resolve front and middle among identical bowls",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Distinguish the front and middle bowls using their current relative order. Preserve those identities when composing the requested stacking relation."
+        ],
+        [
+          "Apply when",
+          "The task distinguishes front and middle bowls for a stacking relation."
+        ],
+        [
+          "Decision context",
+          "Supporting observation: three distinct full masks whose row order is stable and whose public-depth geometry is bowl-like. Disconfirming observation: fewer than three distinct masks, a viewpoint where image row does not track table depth, or inconsistent depth ordering."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-107",
+      "title": "Resolve the middle of three visible bowls",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "When three distinct bowls have a clear horizontal order, bind the middle bowl by that order. Overlapping regions, a different count or an ambiguous relation make the rule inapplicable."
+        ],
+        [
+          "Apply when",
+          "When three distinct bowls have a clear horizontal order."
+        ],
+        [
+          "Decision context",
+          "Continue only while all three masks pass relative bowl geometry and deduplication checks. Call the method into question when there are not exactly three clean instances, X intervals overlap, occlusion makes centers unreliable, or public scene geometry indicates that 'middle' lies on another axis."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-108",
+      "title": "Resolve the stove's actionable control",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the stove's actionable control through its relationship to the stove, keeping cookware and unrelated neighboring parts separate."
+        ],
+        [
+          "Apply when",
+          "The instruction is 'turn on the stove' and the scene contains a stove burner plus one raised rotary control amid unrelated cookware and handles."
+        ],
+        [
+          "Decision context",
+          "Do not use generic 'object', 'switch', 'button', or 'handle' as the primary target. Disconfirming observation: a mask on another object, missing raised-control geometry, or failure of the selected feature to co-move on the first small action calls the binding into question and should stop the suffix. This is whole-program evidence without a matched referent ablation."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-109",
+      "title": "Resolve tomato sauce among groceries",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For tomato-sauce placement, distinguish the upright can from ketchup bottles and other grocery packages before binding pickup."
+        ],
+        [
+          "Apply when",
+          "For tomato-sauce placement."
+        ],
+        [
+          "Decision context",
+          "For this task, when the public instruction says tomato sauce and the RGB contains a ketchup bottle, multiple cans, and other packages, test the observed class-qualified wording 'can of tomato sauce' before binding the pick sequence."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-110",
+      "title": "Rotate while maintaining contact",
+      "layer": "Cerebellum",
+      "category": "manipulate",
+      "tags": [
+        "Rotate"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a rotary control, advance contact position and orientation together around the visible pivot. Stop at the observed goal state instead of continuing an arbitrary larger turn."
+        ],
+        [
+          "Apply when",
+          "Stove/oven knobs, appliance dials, valve handles, and similar vertical-axis controls."
+        ],
+        [
+          "Decision context",
+          "Localize the semantic parent and raised actionable feature from public RGB/depth. Estimate the pivot from the broader lower body, preserve the grasp-minus-pivot offset, and advance both contact XY and tool orientation together in small angular increments."
+        ],
+        [
+          "Code template",
+          "def contact_step(api, arm, position_xyz, orientation_xyzw):\n    before = api.get_scene_image()\n    result = api.goto_pose(arm, position_xyz, orientation_xyzw)\n    after = api.get_scene_image()\n    return {\"before\": before, \"motion\": result, \"after\": after}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-111",
+      "title": "Select a grasp branch with transport clearance",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Choose an acquisition orientation with the later transport corridor in mind. A locally accessible contact may still obstruct the carried object on its route."
+        ],
+        [
+          "Apply when",
+          "Bottles, cans, jars, and compact cylindrical packages moved into drawers, bins, shelves, or bounded surfaces."
+        ],
+        [
+          "Decision context",
+          "Acquire with the verified sign, lift above surrounding geometry, then roll the retained object about the unchanged approach axis through short world-frame jaw-axis steps until reaching the equivalent opposite representation."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-112",
+      "title": "Select body contact for an open vessel",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For an open vessel, choose a visible body or rim region that offers opposing solid surfaces and a clear approach."
+        ],
+        [
+          "Apply when",
+          "Mugs, cups, handled cookware, and handled containers when a distinct handle is publicly visible."
+        ],
+        [
+          "Decision context",
+          "Failure signature: top-down rim or nominal body grasps on an open vessel put a finger inside the opening, tip the vessel during close, or lose it on the first short lift."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-113",
+      "title": "Select contact on a tall vessel",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a tall vessel, select contact on its observed body with clearance for the approach and lift. Avoid treating the topmost visible point as the entire graspable region."
+        ],
+        [
+          "Apply when",
+          "Pots, bottles, and lidded vessels in both object-on-surface and object-in-container tasks when a centered top feature is visible."
+        ],
+        [
+          "Decision context",
+          "Repair: segment the whole object, use a robust extreme-top slice only to estimate body XY, keep an explicit world-frame jaw axis and downward approach selected from the public image, and take grasp Z from a side-contact band. If the broad low band is not reachable with open-finger clearance, switch to a narrower upper-body band without changing axes or target logic."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-114",
+      "title": "Select the foreground support surface",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "When foreground furniture and a rear counter compete as destinations, use their visible parent relationships and relative image positions to identify the intended support."
+        ],
+        [
+          "Apply when",
+          "Object-on-cabinet, object-on-shelf, and object-on-appliance tasks with multiple visible horizontal surfaces."
+        ],
+        [
+          "Decision context",
+          "Use robust planar-bound midpoints for target XY and the dense Z median for support height."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-115",
+      "title": "Select the intended cabinet top",
+      "layer": "Brain",
+      "category": "destination",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the intended foreground cabinet top using its visible position and supporting surface. A rear counter is not interchangeable with that destination."
+        ],
+        [
+          "Apply when",
+          "The intended cabinet top competes with a rear counter as a placement destination."
+        ],
+        [
+          "Decision context",
+          "Disconfirming observation: no broad foreground candidate, a candidate outside the task-relevant foreground/left region, sparse depth, or geometry inconsistent with an elevated support should leave the destination unresolved rather than force this rule."
+        ],
+        [
+          "Code template",
+          "def observe_destination(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"candidates\": candidates,\n            \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-116",
+      "title": "Select the requested cabinet and drawer",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Bind the requested cabinet and its specified drawer as a parent-part pair. Similar handles on another cabinet do not satisfy the instruction."
+        ],
+        [
+          "Apply when",
+          "The instruction names a drawer belonging to a particular cabinet among similar visible handles."
+        ],
+        [
+          "Decision context",
+          "Decision change: query the parent-qualified referent 'top drawer handle of the small cabinet', then accept it only when relative public image geometry and depth support the foreground small-cabinet handle (in the observed task view, a vertical handle box in the lower/foreground scene with sufficient valid depth) instead of taking the highest-score generic handle. Disconfirming observations: no parent-qualified mask, a horizontal/background candidate, insufficient depth, multiple context-valid candidates, or a differently oriented/occluded cabinet should stop selection and trigger re-observation rather than action."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-117",
+      "title": "Select the task-qualified tomato-sauce can",
+      "layer": "Brain",
+      "category": "referent",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "Use the task's tomato-sauce qualifier to distinguish the requested can from similar packages. Bind the source only when its visible identity and body geometry agree."
+        ],
+        [
+          "Apply when",
+          "The requested tomato-sauce can must be separated from similar packages."
+        ],
+        [
+          "Decision context",
+          "Proceed only when a compact upright can candidate has independent point-mask agreement. Reject the binding if those public observations disagree or no compact can is present."
+        ],
+        [
+          "Code template",
+          "def observe_referents(api):\n    image_path = api.get_topdown_image()\n    candidates = api.get_topdown_object_candidates()\n    return {\"image_path\": image_path, \"candidates\": candidates}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-118",
+      "title": "Separate a target from merged instances",
+      "layer": "Cerebellum",
+      "category": "inspect",
+      "tags": [
+        "Observe"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "In clutter, reject a region that merges the requested object with its neighbors. Bind an isolated, shape-consistent instance before selecting its contact."
+        ],
+        [
+          "Apply when",
+          "Cluttered cookware-to-appliance placement and handled-vessel-to-container/surface tasks."
+        ],
+        [
+          "Decision context",
+          "In this task a pan-plus-moka union (240x133 px) outranked the clean moka (105x103 px)."
+        ],
+        [
+          "Code template",
+          "def inspect_region(api, image_path, box, depth_path, intrinsics_path):\n    mask = api.get_sam_mask_from_box(image_path, box)\n    if mask.get(\"status\") != \"ok\":\n        return mask\n    return api.measure_visible_geometry(\n        mask[\"mask_path\"], depth_path, intrinsics_path)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-119",
+      "title": "Separate contact from completed pickup",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "For the cream-cheese package, distinguish initial contact from completed pickup. Preserve the task state until the requested package is supported as elevated with the hand."
+        ],
+        [
+          "Apply when",
+          "For the cream-cheese package."
+        ],
+        [
+          "Decision context",
+          "This observation supports continuing the unexecuted carry suffix. If the requested package remains at source, execution of the frozen grasp is unsupported. If a different object moved, the target binding is wrong. If identity is ambiguous or occluded, stop unresolved while preserving the lifted scene and do not replay pickup."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-120",
+      "title": "Separate gripper obstruction from retention",
+      "layer": "Brain",
+      "category": "progress",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "A blocked gripper can reflect obstruction rather than acquisition of the bowl. Keep the held-state decision unresolved until the task object is supported as acquired."
+        ],
+        [
+          "Apply when",
+          "After the selected white bowl rim is closed between the fingers, gripper aperture indicates obstruction but does not prove retention."
+        ],
+        [
+          "Decision context",
+          "Stop without replay when identity or motion is not discriminating."
+        ],
+        [
+          "Code template",
+          "def inspect_progress(api):\n    scene = api.get_scene_image()\n    previous = api.get_previous_proposer_state()\n    return {\"scene\": scene, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-121",
+      "title": "Set release height relative to the support",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Ground a release in the current destination support. The hand's earlier height does not determine where the carried object's body should settle."
+        ],
+        [
+          "Apply when",
+          "A placement predicate depends on stable support contact; gripper command completion alone is not physical release verification."
+        ],
+        [
+          "Decision context",
+          "After opening, retract vertically along the reverse approach axis and request several observations for settling. Apply when a placement predicate depends on stable support contact. Gripper command completion alone is not physical release verification."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-122",
+      "title": "Settle a handled vessel on its support",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a handled vessel, observe its body and support during release. Finger contact can continue to support or disturb the vessel after the opening command."
+        ],
+        [
+          "Apply when",
+          "Mugs, cups, bowls, and handled cookware placed on plates/trays/coasters or into broad containers."
+        ],
+        [
+          "Decision context",
+          "From public depth, estimate the support center and trimmed planar half-extents, determine the handle-side direction from the public image or parent/handle masks, and shift the desired vessel-body landing point by a tested relative fraction of the support half-extent away from the handle while retaining margin inside the footprint. Preserve grasp-minus-body XY and the verified grasp/path."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    },
+    {
+      "id": "skill-123",
+      "title": "Stabilize a handled vessel",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a handled open vessel that rotates during lift, choose engagement on a clear rim side and account for the handle's effect on the local contact."
+        ],
+        [
+          "Apply when",
+          "Mugs, cups, bowls, and other open vessels."
+        ],
+        [
+          "Decision context",
+          "Failure signature: an open vessel is retained by an exterior pinch but rotates during lift from handle or center-of-mass torque, or a shallow rim pinch closes successfully then slips late in transport. From public RGB/depth, select explicit world-frame closing and approach axes, estimate the rim from robust top points, shift the grasp center toward the exterior rim along the jaw axis so one finger is inside and one outside, and engage roughly 12-20 mm below the observed top when geometry permits."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-124",
+      "title": "Stabilize contact on a compact package",
+      "layer": "Cerebellum",
+      "category": "grasp",
+      "tags": [
+        "Grasp"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "For a compact package, choose opposing body surfaces that can sustain the first lift. An initial close without stable body contact does not justify transport."
+        ],
+        [
+          "Apply when",
+          "Cans/jars in container-placement tasks and cartons/boxes in surface or bin placement when center and contact height have already been checked."
+        ],
+        [
+          "Decision context",
+          "Preserve the public-depth center, contact band, and world-down approach."
+        ],
+        [
+          "Code template",
+          "def acquire(api, arm, request, approach_xyz, open_width_m):\n    grasp = api.compile_pose(\"grasp\", request)\n    if grasp.get(\"status\") != \"ok\":\n        return grasp\n    q = grasp[\"orientation_xyzw\"]\n    for command in (\n        lambda: api.gripper_goto(arm, open_width_m),\n        lambda: api.goto_pose(arm, approach_xyz, q),\n        lambda: api.goto_pose(arm, grasp[\"target_position_xyz\"], q),\n        lambda: api.gripper_goto(arm, 0.0),\n    ):\n        result = command()\n        if result.get(\"status\") != \"ok\":\n            return result\n    return api.get_wrist_view(arm)"
+        ]
+      ]
+    },
+    {
+      "id": "skill-125",
+      "title": "Track the carried carton after transport",
+      "layer": "Brain",
+      "category": "binding",
+      "tags": [],
+      "fields": [
+        [
+          "Rule",
+          "After transporting a carton, track that same object's current relation to the destination. Preserve the completed carry while resolving the remaining placement objective."
+        ],
+        [
+          "Apply when",
+          "After transporting a carton."
+        ],
+        [
+          "Decision context",
+          "Decision change: enumerate semantic candidates and select only one with enough public-depth points above basket-rim height and XY continuity with the completed high carry endpoint. Abort the suffix if none qualifies, then use only a bounded target-minus-held-body residual at high clearance. Disconfirming observation: no elevated endpoint-consistent candidate, an implausibly large residual, or public evidence that the carton was lost."
+        ],
+        [
+          "Code template",
+          "def refresh_bindings(api):\n    image_path = api.get_topdown_image()\n    previous = api.get_previous_proposer_state()\n    return {\"image_path\": image_path, \"previous\": previous}"
+        ]
+      ]
+    },
+    {
+      "id": "skill-126",
+      "title": "Verify separation after opening the gripper",
+      "layer": "Cerebellum",
+      "category": "transport",
+      "tags": [
+        "Place"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "After opening the gripper, inspect whether the object has separated from the fingers and settled on its support. Completion of the opening command alone does not establish release."
+        ],
+        [
+          "Apply when",
+          "After opening the gripper."
+        ],
+        [
+          "Decision context",
+          "After opening at a small safe drop gap, retract vertically along the reverse approach direction to the clear transit pose, then allow settling. Treat gripper command completion as an actuator event, not proof of physical release."
+        ],
+        [
+          "Code template",
+          "def place(api, arm, request, open_width_m):\n    previous = api.get_previous_proposer_state()\n    if not previous.get(\"held_object_state\"):\n        return previous\n    request[\"held_object_state\"] = previous[\"held_object_state\"]\n    request[\"table_z_world\"] = previous[\"table_z_world\"]\n    compiled = api.compile_pose(\"place\", request)\n    if compiled.get(\"status\") != \"ok\":\n        return compiled\n    for key in (\"carry_tool0_pose\", \"release_tool0_pose\"):\n        pose = compiled[key]\n        moved = api.goto_pose(arm, pose[\"target_position_xyz\"], pose[\"orientation_xyzw\"])\n        if moved.get(\"status\") != \"ok\":\n            return moved\n    opened = api.gripper_goto(arm, open_width_m)\n    if opened.get(\"status\") != \"ok\":\n        return opened\n    return api.get_scene_image()"
+        ]
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "inspect",
+      "layer": "Cerebellum",
+      "name": "Perception & geometry",
+      "description": "Ground visible parts, openings and support surfaces before acting."
+    },
+    {
+      "id": "grasp",
+      "layer": "Cerebellum",
+      "name": "Grasp & retention",
+      "description": "Choose local contacts and check acquisition through the first lift."
+    },
+    {
+      "id": "transport",
+      "layer": "Cerebellum",
+      "name": "Transport & placement",
+      "description": "Carry the held body, align it with support, release and disengage."
+    },
+    {
+      "id": "manipulate",
+      "layer": "Cerebellum",
+      "name": "Contact & articulation",
+      "description": "Control local pushes, handle interactions, rotations and wiping strokes."
+    },
+    {
+      "id": "referent",
+      "layer": "Brain",
+      "name": "Object identity",
+      "description": "Resolve the instruction’s intended entity among similar visible objects."
+    },
+    {
+      "id": "binding",
+      "layer": "Brain",
+      "name": "Scene & skill bindings",
+      "description": "Bind current entities and inputs to applicable frozen local skills."
+    },
+    {
+      "id": "destination",
+      "layer": "Brain",
+      "name": "Destination reasoning",
+      "description": "Select the task-level destination and intended relation."
+    },
+    {
+      "id": "sequence",
+      "layer": "Brain",
+      "name": "Ordering & composition",
+      "description": "Choose which relation to establish first and compose the remaining objective."
+    },
+    {
+      "id": "progress",
+      "layer": "Brain",
+      "name": "Progress & continuation",
+      "description": "Preserve completed relations and continue only on supported physical progress."
+    }
+  ],
+  "count": 126
+}

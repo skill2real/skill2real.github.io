@@ -1,0 +1,48 @@
+standard_api/v1 — 18 documented operations
+
+This is an operation reference, not an executable program or a recorded trace.
+Arguments marked “...” stand for documented options in the active API contract.
+
+PUBLIC PERCEPTION · 8
+
+api.get_scene_image()
+api.get_topdown_image()
+api.get_wrist_view(arm, ...)
+api.get_topdown_stereo_view(...)
+api.get_foundation_stereo_depth(left_image_path, right_image_path, ...)
+api.get_sam_mask_from_box(image_path, box_xyxy)
+api.measure_visible_geometry(mask_path, depth_path, intrinsics_path, ...)
+api.get_topdown_object_candidates(...)
+
+STATE & POSE CONSTRUCTION · 6
+
+api.preprocess(...)
+api.get_observation_geometry(...)
+api.get_previous_proposer_state()
+api.grasp_center_to_tool0_pose(grasp_center_xyz, ...)
+api.compile_pose(mode, request)
+api.get_end_effector_pose(arm)
+
+ROBOT CONTROL · 4
+
+api.gohome(...)
+api.goto_pose(arm, position_xyz, orientation_xyzw, ...)
+api.gripper_goto(arm, opening_width_m, ...)
+api.goto_pose_both(position0, quaternion_xyzw0, position1, quaternion_xyzw1, ...)
+
+EXECUTION BOUNDARY
+
+The documented Proposer contract asks for a program defining main(api),
+returning one dictionary, without module imports. The Proposer selects the
+calls and their arguments from current public evidence and skill text.
+
+Positions and openings use meters; motion quaternions use XYZW. Pose compilation
+does not execute motion. Inspect native results before dependent actions and
+fresh public observations to assess the physical effect.
+
+The 18-operation specification does not reconstruct every historical run.
+Recorded code using an older interface cannot be relabeled as this interface
+without a verified implementation and execution record.
+
+Source: paper appendix Shared Robot API and Execution Contract, and the
+documented Proposer interface contract.

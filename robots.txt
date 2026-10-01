@@ -1,0 +1,9 @@
+# Permit user-requested reading and search retrieval of this public research site.
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: *
+Allow: /

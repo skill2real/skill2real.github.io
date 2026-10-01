@@ -1,0 +1,89 @@
+[
+  {
+    "group": "Public perception",
+    "operations": [
+      {
+        "name": "get_scene_image",
+        "description": "Current front scene image."
+      },
+      {
+        "name": "get_topdown_image",
+        "description": "Current top-down image for visual target selection."
+      },
+      {
+        "name": "get_wrist_view",
+        "description": "Wrist image and available camera calibration."
+      },
+      {
+        "name": "get_topdown_stereo_view",
+        "description": "Calibrated stereo RGB pair."
+      },
+      {
+        "name": "get_foundation_stereo_depth",
+        "description": "Metric stereo depth bound to its source observation and calibration."
+      },
+      {
+        "name": "get_sam_mask_from_box",
+        "description": "Segment a supplied box on a public image."
+      },
+      {
+        "name": "measure_visible_geometry",
+        "description": "Measure visible 3D geometry from a mask, depth, and calibration."
+      },
+      {
+        "name": "get_topdown_object_candidates",
+        "description": "Public source candidates with geometry and validity checks."
+      }
+    ]
+  },
+  {
+    "group": "State & pose construction",
+    "operations": [
+      {
+        "name": "preprocess",
+        "description": "Refresh public perception outputs."
+      },
+      {
+        "name": "get_observation_geometry",
+        "description": "Geometry grounded in a supplied public description."
+      },
+      {
+        "name": "get_previous_proposer_state",
+        "description": "Prior public decision state and runtime carry geometry."
+      },
+      {
+        "name": "grasp_center_to_tool0_pose",
+        "description": "Convert a chosen grasp center into a tool-frame pose."
+      },
+      {
+        "name": "compile_pose",
+        "description": "Construct grasp or placement poses without moving the robot."
+      },
+      {
+        "name": "get_end_effector_pose",
+        "description": "Current end-effector pose for an arm."
+      }
+    ]
+  },
+  {
+    "group": "Robot control",
+    "operations": [
+      {
+        "name": "gohome",
+        "description": "Command an arm to its home configuration."
+      },
+      {
+        "name": "goto_pose",
+        "description": "Command a position and XYZW orientation."
+      },
+      {
+        "name": "gripper_goto",
+        "description": "Command jaw opening in meters."
+      },
+      {
+        "name": "goto_pose_both",
+        "description": "Command both arms to their respective poses."
+      }
+    ]
+  }
+]
